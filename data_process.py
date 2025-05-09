@@ -38,10 +38,12 @@ def calculate_l3_mean_and_variance(data):
                 # 计算流产率的均值和方差
                 mean_abortion = other_farms['abortion_1_7'].mean()
                 var_abortion = other_farms['abortion_1_7'].std()
+                median_abortion = other_farms['abortion_1_7'].median()
                     
                 # 更新均值和方差字段
                 data.at[idx, 'abortion_1_7_l3_mean'] = mean_abortion
                 data.at[idx, 'abortion_1_7_l3_var'] = var_abortion
+                data.at[idx, 'abortion_1_7_l3_median'] = median_abortion
         
     print(f"{l2_name} 数据处理完成")
     return data
@@ -82,16 +84,22 @@ def pick_prrs_data(check_data):
             # 条带
             'bDoAAKqffmXWD/D5',
             'bDoAAKqewhjWD/D5',
+
+            # 蓝耳-NADC30条带
+            'bDoAAKqewlzWD/D5',
+            # prrsvct
+            'bDoAAKqffxXWD/D5',
+
             # 抗原
             'bDoAAfYq6kvWD/D5',
             # 抗体
             'bDoAAKqZiKzWD/D5',
-            'bDoAAKqZiKzWD/D5',
             # s/p
             'bDoAAKqZiKzWD/D5',
-            'bDoAAKqZiKzWD/D5'
         ])
     ]
+
+    check_data.to_csv('processed_data/filterprrs_check_data.csv', index=False, encoding='utf-8')
     
     return check_data
 

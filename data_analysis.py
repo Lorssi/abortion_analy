@@ -7,31 +7,9 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from tqdm import tqdm
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
-def calculate_mean_and_variance():
-    # 按org_id分组计算平均值和方差
-    grouped_stats = data.groupby('org_id').agg({
-        'abortion_1_7': ['mean', 'var'],
-        'abortion_8_14': ['mean', 'var'],
-        'abortion_15_21': ['mean', 'var'],
-        'date_code': 'count'  # 计算每个org_id的记录数
-    })
-
-    # 重命名列名
-    grouped_stats.columns = [
-        'abortion_1_7_mean', 'abortion_1_7_variance',
-        'abortion_8_14_mean', 'abortion_8_14_variance',
-        'abortion_15_21_mean', 'abortion_15_21_variance',
-        'count'  # 记录数
-    ]
-
-    # 重置索引，使org_id成为常规列
-    grouped_stats = grouped_stats.reset_index()
-
-    # 保存文件
-    grouped_stats.to_csv('tmp/mean_and_variance.csv', index=False)
-
-def draw_pigfarm_all_years(mydata, base_output_dir):
+def draw_pigfarm_all_years(mydata, base_output_dir, asf_data):
     
     # 按猪场分组处理数据
     for org_inv_nm, org_group in tqdm(mydata.groupby('org_inv_nm')):
@@ -131,14 +109,29 @@ def draw_pigfarm_all_years(mydata, base_output_dir):
                        edgecolors='black', linewidth=1.5, zorder=5)
         
         # 添加三级单位均值线 (用蓝色线表示)
-        if 'abortion_1_7_l3_mean' in org_group.columns:
+        if 'abortion_1_7_l3_mean' in org_group.columns and 'abortion_1_7_l3_var' in org_group.columns:
             l3_mean = org_group['abortion_1_7_l3_mean'].values
-            plt.plot(dates, l3_mean, '-', color='blue', linewidth=1.5)
-        
-        # 添加三级单位方差线 (用紫色线表示)
-        if 'abortion_1_7_l3_var' in org_group.columns:
             l3_var = org_group['abortion_1_7_l3_var'].values
-            plt.plot(dates, l3_var, '-', color='purple', linewidth=1.5)
+            
+            # 计算上边界和下边界
+            upper_bound = l3_mean + l3_var
+            lower_bound = l3_mean - l3_var
+            
+            # 防止下边界出现负值
+            lower_bound = np.maximum(lower_bound, 0)
+            
+            # 绘制上下边界线，使用浅紫色，线宽较细
+            plt.plot(dates, upper_bound, '-', color='#8A2BE2', linewidth=1, alpha=0.7, label='_nolegend_')
+            plt.plot(dates, lower_bound, '-', color='#8A2BE2', linewidth=1, alpha=0.7, label='_nolegend_')
+            plt.plot(dates, l3_mean, '-', color='blue', linewidth=1.5)
+            
+            # 填充上下边界之间的区域，表示方差范围
+            plt.fill_between(dates, lower_bound, upper_bound, color='#8A2BE2', alpha=0.1)
+
+        if 'abortion_1_7_l3_median' in org_group.columns:
+            # 添加三级单位流产率中位数线 (用紫色线表示)
+            l3_median = org_group['abortion_1_7_l3_median'].values
+            plt.plot(dates, l3_median, '-', color='purple', linewidth=1.5, label='_nolegend_')
         
         # 添加PRRS检测阳性率散点图 (用红色星形点表示)
         if 'prrs_check_out_ratio' in org_group.columns:
@@ -168,7 +161,49 @@ def draw_pigfarm_all_years(mydata, base_output_dir):
         # 绘制同一三级单位其他猪场的流产率散点
         if other_farms_points:
             other_x, other_y = zip(*other_farms_points)
-            plt.scatter(other_x, other_y, s=15, color='gray', alpha=0.3, zorder=2, marker='o', label='同一三级单位其他猪场')
+            plt.scatter(other_x, other_y, s=15, color='gray', alpha=0.3, zorder=2, marker='o')
+        
+        # 添加非瘟发病日期标记
+        # 筛选当前猪场的非瘟发病记录
+        farm_asf_records = asf_data[asf_data['pigfarm_dk'] == current_farm_dk]
+        has_asf = False
+        
+        # 遍历该猪场的所有非瘟发病记录
+        for _, asf_record in farm_asf_records.iterrows():
+            start_date = pd.to_datetime(asf_record['start_dt'])
+            end_date = pd.to_datetime(asf_record['end_dt'])
+            
+            # 确保发病日期在图表显示范围内
+            min_date = org_group['date_code'].min()
+            max_date = org_group['date_code'].max()
+            
+            # 如果发病日期与图表时间范围有交集
+            if not (end_date < min_date or start_date > max_date):
+                has_asf = True
+                # 调整日期范围，确保在图表范围内
+                visible_start = max(start_date, min_date)
+                visible_end = min(end_date, max_date)
+                
+                # 转换为matplotlib日期格式
+                visible_start_num = mdates.date2num(visible_start)
+                visible_end_num = mdates.date2num(visible_end)
+                
+                # 添加阴影区域标记非瘟发病期间
+                plt.axvspan(visible_start_num, visible_end_num, 
+                           alpha=0.2, color='red', zorder=1, 
+                           label='_' if has_asf else '非瘟发病期')
+                
+                # 添加发病起止日期的垂直线
+                plt.axvline(x=visible_start_num, color='red', linestyle='--', 
+                           alpha=0.7, linewidth=1, zorder=1)
+                plt.axvline(x=visible_end_num, color='red', linestyle='--', 
+                           alpha=0.7, linewidth=1, zorder=1)
+                
+                # 添加标注，显示非瘟发病的起止日期
+                plt.text(visible_start_num, y_max*0.95, start_date.strftime('%Y-%m-%d'), 
+                        rotation=90, verticalalignment='top', color='red', fontsize=8)
+                plt.text(visible_end_num, y_max*0.95, end_date.strftime('%Y-%m-%d'), 
+                        rotation=90, verticalalignment='top', color='red', fontsize=8)
         
         # 设置x轴为日期格式
         ax = plt.gca()
@@ -223,13 +258,18 @@ def draw_pigfarm_all_years(mydata, base_output_dir):
             Line2D([0], [0], color='black', marker='o', markersize=6, linestyle='', label='流产率值'),
             Line2D([0], [0], marker='o', markersize=6, markerfacecolor='none', markeredgecolor='black', linestyle='', label='流产率空值'),
             Line2D([0], [0], color='blue', lw=1.5, label='三级单位均值'),
-            Line2D([0], [0], color='purple', lw=1.5, label='三级单位方差'),
+            Patch(facecolor='#8A2BE2', alpha=0.1, edgecolor='#8A2BE2', linewidth=1, label='均值±方差范围'),
             Line2D([0], [0], color='red', marker='*', markersize=10, linestyle='', label='PRRS检测阳性率'),
             Line2D([0], [0], color='gray', marker='o', markersize=4, alpha=0.3, linestyle='', label='同一三级单位其他猪场'),
             Line2D([0], [0], color='red', lw=2, label='流产率 > 5‰'),
             Line2D([0], [0], color='orange', lw=2, label='2.5‰ < 流产率 ≤ 5‰'),
             Line2D([0], [0], color='green', lw=2, label='流产率 ≤ 2.5‰')
         ]
+        
+        # 如果有非瘟记录，添加非瘟图例
+        if has_asf:
+            legend_elements.append(Patch(facecolor='red', alpha=0.2, label='非瘟发病期'))
+            
         plt.legend(handles=legend_elements, loc='upper right')
         
         plt.grid(True, linestyle='--', alpha=0.7)
@@ -241,7 +281,7 @@ def draw_pigfarm_all_years(mydata, base_output_dir):
         plt.close()
 
 
-def draw_diagram(mydata, l2_name):
+def draw_diagram(mydata, l2_name, asf_data):
     # 创建输出目录
     base_output_dir = f'tmp/abortion_plots/{l2_name}'
     os.makedirs(base_output_dir, exist_ok=True)
@@ -250,7 +290,7 @@ def draw_diagram(mydata, l2_name):
     mydata['year'] = mydata['date_code'].dt.year
 
     # 画出每个猪场的所有年份流产率变化图
-    draw_pigfarm_all_years(mydata, base_output_dir)
+    draw_pigfarm_all_years(mydata, base_output_dir, asf_data)
 
     print(f"流产图表已保存到 {base_output_dir} 目录")
     
@@ -258,8 +298,16 @@ def draw_diagram(mydata, l2_name):
 if __name__ == "__main__":
     # 避免中文乱码
     plt.rcParams['font.family'] = 'SimHei'
-
-    # 加载数据（如果已经加载则不需要重复）
+    
+    # 加载非瘟发病数据
+    asf_data = pd.read_csv('raw_data/ADS_PIG_FARM_AND_REARER_ONSET.csv', encoding='utf-8')
+    asf_data = asf_data.rename(columns={'org_inv_dk': 'pigfarm_dk'})
+    
+    # 确保日期列格式正确
+    asf_data['start_dt'] = pd.to_datetime(asf_data['start_dt'])
+    asf_data['end_dt'] = pd.to_datetime(asf_data['end_dt'])
+    
+    # 加载流产率数据
     l2_name_list = ['猪业一部', '猪业二部', '猪业三部']
 
     for l2_name in l2_name_list:
@@ -271,7 +319,7 @@ if __name__ == "__main__":
             
         data['date_code'] = pd.to_datetime(data['date_code'])
 
-        # 绘制图表
-        draw_diagram(data, l2_name)
+        # 绘制图表，传入非瘟数据
+        draw_diagram(data, l2_name, asf_data)
 
 
