@@ -133,13 +133,50 @@ def draw_pigfarm_all_years(mydata, base_output_dir, asf_data):
             l3_median = org_group['abortion_1_7_l3_median'].values
             plt.plot(dates, l3_median, '-', color='purple', linewidth=1.5, label='_nolegend_')
         
-        # 添加PRRS检测阳性率散点图 (用红色星形点表示)
-        if 'prrs_check_out_ratio' in org_group.columns:
-            prrs_ratios = org_group['prrs_check_out_ratio'].values
-            non_null_prrs = ~np.isnan(prrs_ratios)
-            if np.any(non_null_prrs):
-                plt.scatter(dates[non_null_prrs], prrs_ratios[non_null_prrs], 
-                           marker='*', s=150, color='red', alpha=0.7)
+
+
+        # 添加PRRS检测阳性率散点图
+        # if 'prrs_check_out_ratio' in org_group.columns:
+        #     prrs_ratios = org_group['prrs_check_out_ratio'].values
+        #     non_null_prrs = ~np.isnan(prrs_ratios)
+            
+        #     # 默认情况下，绘制常规的PRRS点(红色星形)
+        #     if np.any(non_null_prrs):
+        #         # 检查是否有prrs_check_qty和prrs_check_type列
+        #         if 'prrs_check_qty' in org_group.columns and 'prrs_check_type' in org_group.columns:
+        #             # 创建不同条件的掩码
+        #             has_qty_mask = ~np.isnan(org_group['prrs_check_qty'].values)
+                    
+        #             # 根据check_type划分有check_qty的点
+        #             type0_mask = has_qty_mask & (org_group['prrs_check_type'] == 0) & non_null_prrs
+        #             type1_mask = has_qty_mask & (org_group['prrs_check_type'] == 1) & non_null_prrs
+        #             type2_mask = has_qty_mask & (org_group['prrs_check_type'] == 2) & non_null_prrs
+                    
+        #             # 绘制没有check_qty或类型不明确的点(保持红色星形)
+        #             other_mask = non_null_prrs & (~has_qty_mask | np.isnan(org_group['prrs_check_type'].values))
+        #             if np.any(other_mask):
+        #                 plt.scatter(dates[other_mask], prrs_ratios[other_mask], 
+        #                            marker='*', s=150, color='red', alpha=0.7)
+                    
+        #             # 绘制野毒类型(红色星形)
+        #             if np.any(type0_mask):
+        #                 plt.scatter(dates[type0_mask], prrs_ratios[type0_mask], 
+        #                            marker='*', s=150, color='red', alpha=0.7)
+                    
+        #             # 绘制蓝耳类型(蓝色星形)
+        #             if np.any(type1_mask):
+        #                 plt.scatter(dates[type1_mask], prrs_ratios[type1_mask], 
+        #                            marker='*', s=150, color='blue', alpha=0.7)
+                    
+        #             # 绘制混合类型(紫色星形)
+        #             if np.any(type2_mask):
+        #                 plt.scatter(dates[type2_mask], prrs_ratios[type2_mask], 
+        #                            marker='*', s=150, color='purple', alpha=0.7)
+        #         else:
+        #             # 如果没有必需的列，则使用默认的红色星形
+        #             plt.scatter(dates[non_null_prrs], prrs_ratios[non_null_prrs], 
+        #                        marker='*', s=150, color='red', alpha=0.7)
+            
         
         # 添加同一三级单位其他猪场当天的流产率数据点 (透明浅灰色散点)
         other_farms_points = []
@@ -259,7 +296,10 @@ def draw_pigfarm_all_years(mydata, base_output_dir, asf_data):
             Line2D([0], [0], marker='o', markersize=6, markerfacecolor='none', markeredgecolor='black', linestyle='', label='流产率空值'),
             Line2D([0], [0], color='blue', lw=1.5, label='三级单位均值'),
             Patch(facecolor='#8A2BE2', alpha=0.1, edgecolor='#8A2BE2', linewidth=1, label='均值±方差范围'),
-            Line2D([0], [0], color='red', marker='*', markersize=10, linestyle='', label='PRRS检测阳性率'),
+            Line2D([0], [0], color='red', marker='*', markersize=10, linestyle='', label='PRRS检测(野毒)'),
+            Line2D([0], [0], color='blue', marker='*', markersize=10, linestyle='', label='PRRS检测(蓝耳)'),
+            Line2D([0], [0], color='purple', marker='*', markersize=10, linestyle='', label='PRRS检测(混合)'),
+            Line2D([0], [0], color='green', marker='*', markersize=10, linestyle='', label='PRRS检测(阴性)'),
             Line2D([0], [0], color='gray', marker='o', markersize=4, alpha=0.3, linestyle='', label='同一三级单位其他猪场'),
             Line2D([0], [0], color='red', lw=2, label='流产率 > 5‰'),
             Line2D([0], [0], color='orange', lw=2, label='2.5‰ < 流产率 ≤ 5‰'),
@@ -274,11 +314,73 @@ def draw_pigfarm_all_years(mydata, base_output_dir, asf_data):
         
         plt.grid(True, linestyle='--', alpha=0.7)
         plt.tight_layout(pad=3.0)  # 增加边距，确保所有标签都能显示
+
+        # 添加PRRS检测阳性率散点图
+        if 'prrs_check_out_ratio' in org_group.columns:
+            prrs_ratios = org_group['prrs_check_out_ratio'].values
+            non_null_prrs = ~np.isnan(prrs_ratios)
+            
+            if np.any(non_null_prrs):
+                # 创建次y轴
+                ax1 = plt.gca()  # 获取主坐标轴
+                ax2 = ax1.twinx()  # 创建次坐标轴
+                
+                # 设置次y轴范围和标签
+                max_prrs_ratio = np.nanmax(prrs_ratios) if np.any(non_null_prrs) else 1.0
+                ax2.set_ylim(0, max_prrs_ratio * 1.1)  # 为最大值预留10%的空间
+                ax2.set_ylabel('PRRS检测阳性率', color='darkred')
+                ax2.tick_params(axis='y', labelcolor='darkred')
+                
+                # 检查是否有prrs_check_out_qty和prrs_check_type列
+                if 'prrs_check_out_qty' in org_group.columns and 'prrs_check_type' in org_group.columns:
+                    # 创建不同条件的掩码
+                    has_qty_mask = ~np.isnan(org_group['prrs_check_out_qty'].values)
+                    
+                    # 添加prrs_check_out_qty = 0的掩码
+                    zero_qty_mask = has_qty_mask & (org_group['prrs_check_out_qty'] == 0) & non_null_prrs
+                    
+                    # 根据check_type划分有check_qty的点
+                    type0_mask = has_qty_mask & (org_group['prrs_check_type'] == 0) & (org_group['prrs_check_out_qty'] > 0) & non_null_prrs
+                    type1_mask = has_qty_mask & (org_group['prrs_check_type'] == 1) & (org_group['prrs_check_out_qty'] > 0) & non_null_prrs
+                    type2_mask = has_qty_mask & (org_group['prrs_check_type'] == 2) & (org_group['prrs_check_out_qty'] > 0) & non_null_prrs
+                    
+                    # 绘制没有check_qty或类型不明确的点(红色星形)
+                    other_mask = non_null_prrs & (~has_qty_mask | np.isnan(org_group['prrs_check_type'].values))
+                    if np.any(other_mask):
+                        ax2.scatter(dates[other_mask], prrs_ratios[other_mask], 
+                               marker='*', s=150, color='red', alpha=0.7)
+                    
+                    # 绘制check_out_qty为0的点(绿色星形)
+                    if np.any(zero_qty_mask):
+                        ax2.scatter(dates[zero_qty_mask], prrs_ratios[zero_qty_mask], 
+                               marker='*', s=150, color='green', alpha=0.7)
+                    
+                    # 绘制野毒类型(红色星形)
+                    if np.any(type0_mask):
+                        ax2.scatter(dates[type0_mask], prrs_ratios[type0_mask], 
+                               marker='*', s=150, color='red', alpha=0.7)
+                    
+                    # 绘制蓝耳类型(蓝色星形)
+                    if np.any(type1_mask):
+                        ax2.scatter(dates[type1_mask], prrs_ratios[type1_mask], 
+                               marker='*', s=150, color='blue', alpha=0.7)
+                    
+                    # 绘制混合类型(紫色星形)
+                    if np.any(type2_mask):
+                        ax2.scatter(dates[type2_mask], prrs_ratios[type2_mask], 
+                               marker='*', s=150, color='purple', alpha=0.7)
+                else:
+                    # 如果没有必需的列，则使用默认的红色星形
+                    ax2.scatter(dates[non_null_prrs], prrs_ratios[non_null_prrs], 
+                           marker='*', s=150, color='red', alpha=0.7)
+
         
         # 保存图片，直接使用猪场名称作为文件名
         output_filename = f'{prefix}{org_inv_nm}_abortion_rate.png'
         plt.savefig(os.path.join(base_output_dir, output_filename), dpi=300, bbox_inches='tight')
         plt.close()
+
+        break
 
 
 def draw_diagram(mydata, l2_name, asf_data):

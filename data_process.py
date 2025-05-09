@@ -115,6 +115,12 @@ def calculate_prrs_check_out_ratio(data, check_data):
     """
     # 创建新列存储PRRS检测阳性率
     data['prrs_check_out_ratio'] = np.nan
+
+    # 创建新列存储PRRS检测类型，检测份数
+    data['prrs_check_type'] = np.nan # 0 野毒； 1 蓝耳； 2 混合
+    data['prrs_check_out_qty'] = np.nan
+    data['prrs_check_qty_ye_du'] = np.nan
+    data['prrs_check_qty_lan_er'] = np.nan
     
     # 确保check_data中的日期是datetime类型
     if not pd.api.types.is_datetime64_any_dtype(check_data['date_code']):
@@ -136,11 +142,37 @@ def calculate_prrs_check_out_ratio(data, check_data):
             (check_data['date_code'] >= date_15_days_ago) & 
             (check_data['date_code'] <= current_date)
         ]
-        
+
+
         # 如果找到检测数据，计算阳性率
         if not farm_recent_checks.empty:
             total_check_qty = farm_recent_checks['check_qty'].sum()
+            data.at[idx, 'prrs_check_out_qty'] = farm_recent_checks['check_out_qty'].sum()
+
+            # 计算检出份数
             total_check_out_qty = farm_recent_checks['check_out_qty'].sum()
+        
+            # 判断检测类型
+            # 野毒
+            ye_du = ['bDoAAfRM6YiCrSt1', 'bDoAArPPgj6CrSt1', 'bDoAAfRM6IGCrSt1', 'bDoAAfYsNUGCrSt1', 'bDoAAfYsM8eCrSt1', 'bDoAAfYr79SCrSt1']
+            # 抗原
+            lan_er = ['bDoAAJyZSTSCrSt1', 'bDoAAfYgkW2CrSt1', 'bDoAAfYq6LWCrSt1', 'bDoAAfYq6kWCrSt1', 'bDoAAfYsNKyCrSt1', 'bDoAAwWyhPOCrSt1',
+            # 抗体
+            'bDoAAJyZSZiCrSt1']
+
+            # 检查是否包含野毒和蓝耳的检测项
+            has_ye_du = farm_recent_checks['check_item_dk'].isin(ye_du).any()
+            has_lan_er = farm_recent_checks['check_item_dk'].isin(lan_er).any()
+            data.at[idx, 'prrs_check_qty_ye_du'] = farm_recent_checks[farm_recent_checks['check_item_dk'].isin(ye_du)]['check_qty'].sum()
+            data.at[idx, 'prrs_check_qty_lan_er'] = farm_recent_checks[farm_recent_checks['check_item_dk'].isin(lan_er)]['check_qty'].sum()
+            
+            # 根据检测项类型设置prrs_check_type
+            if (has_ye_du and data.at[idx, 'prrs_check_qty_ye_du'] > 0 ) and (has_lan_er and data.at[idx, 'prrs_check_qty_lan_er'] > 0):
+                data.at[idx, 'prrs_check_type'] = 2  # 混合
+            elif (has_ye_du and data.at[idx, 'prrs_check_qty_ye_du'] > 0):
+                data.at[idx, 'prrs_check_type'] = 0  # 野毒
+            elif (has_lan_er and data.at[idx, 'prrs_check_qty_lan_er'] > 0):
+                data.at[idx, 'prrs_check_type'] = 1  # 蓝耳
             
             # 避免除零错误
             if total_check_qty > 0:
